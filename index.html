@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>株価推移 ＆ 1年多因子マルチシナリオ予測ダッシュボード</title>
+  <title>株価推移予測</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -503,6 +503,7 @@ function App() {
   const [selectedStock, setSelectedStock] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showFx, setShowFx] = useState(false);
+  const [showSpec, setShowSpec] = useState(false);
   const [newSymbol, setNewSymbol] = useState('');
   const [newName, setNewName] = useState('');
 
@@ -555,12 +556,10 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center space-x-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/30 text-lg">📊</div>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-white">株価推移 ＆ 1年多因子マルチシナリオ予測</h1>
-              <p className="text-xs text-gray-400 hidden sm:block">PER・PBR・配当利回り・信用倍率・アナリスト予想・IR情報 統合分析 | 2026年8月11日時点</p>
-            </div>
+            <h1 className="text-base sm:text-lg font-bold text-white">株価推移予測</h1>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+            <button onClick={() => setShowSpec(true)} className="px-2.5 py-1.5 bg-indigo-900/40 hover:bg-indigo-800/50 text-indigo-300 text-xs font-semibold rounded-lg border border-indigo-800/50">📋 予測仕様</button>
             <button onClick={() => setShowFx(!showFx)} className="px-2.5 py-1.5 bg-amber-900/40 hover:bg-amber-800/50 text-amber-300 text-xs font-semibold rounded-lg border border-amber-800/50">💱 ドル円</button>
             <div className="flex bg-gray-900 p-1 rounded-lg border border-gray-800 text-xs">
               <button onClick={() => setRegionFilter('ALL')} className={`px-2.5 py-1 rounded ${regionFilter === 'ALL' ? 'bg-blue-600 text-white font-bold' : 'text-gray-400'}`}>すべて</button>
@@ -795,6 +794,66 @@ function App() {
 
             <div className="flex justify-end pt-2 border-t border-gray-800">
               <button onClick={() => setSelectedStock(null)} className="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl">閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 予測仕様モーダル */}
+      {showSpec && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#111827] border border-gray-800 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center border-b border-gray-800 pb-3 mb-4">
+              <h2 className="text-lg font-bold text-white">📋 予測仕様</h2>
+              <button onClick={() => setShowSpec(false)} className="text-gray-400 hover:text-white p-1 text-lg">✕</button>
+            </div>
+            <div className="overflow-y-auto space-y-4 flex-1 pr-1 text-xs text-gray-300 leading-relaxed">
+              <div className="bg-blue-950/30 border border-blue-900/30 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-blue-400 mb-2">分析手法</h3>
+                <p>PER・PBR・EPS成長率・配当利回り・信用倍率・アナリストコンセンサス目標株価・直近IR/決算情報を統合したマルチファクターモデルによる1年先予測。</p>
+              </div>
+              <div className="bg-indigo-950/30 border border-indigo-900/30 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-indigo-400 mb-2">3シナリオ予測</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li><span className="text-amber-400 font-semibold">楽観シナリオ:</span> S字カーブ（成長飽和型）— アナリスト上値目標×1.15をターゲットに非線形成長曲線を適用</li>
+                  <li><span className="text-cyan-400 font-semibold">通常シナリオ:</span> 指数収束型 — アナリストコンセンサス目標株価への指数的収束（1-e^(-2.5t)）</li>
+                  <li><span className="text-rose-400 font-semibold">悲観シナリオ:</span> L/U型調整 — 信用倍率に応じた調整率（10倍超: -35%、3倍超: -25%、それ以下: -18%）を適用</li>
+                </ul>
+              </div>
+              <div className="bg-emerald-950/30 border border-emerald-900/30 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-emerald-400 mb-2">信頼度スコア算出</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>基準値: 80点</li>
+                  <li>信用倍率 20倍超: −20pt / 5倍超: −10pt</li>
+                  <li>PER 40倍超: −8pt</li>
+                  <li>EPS成長率 20%超: +5pt</li>
+                  <li>アナリスト評価「強気/Strong Buy」: +5pt</li>
+                  <li>最終スコア: 40〜95の範囲にクリッピング</li>
+                </ul>
+              </div>
+              <div className="bg-amber-950/30 border border-amber-900/30 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-amber-400 mb-2">為替影響（米国株）</h3>
+                <p>USD/JPY為替予測は主要金融機関（ゴールドマン・サックス、MUFG、野村證券、BofA、モルガン・スタンレー等）のコンセンサスに基づき、3シナリオ（円高¥140〜148 / ベースライン¥150〜158 / 円安¥162〜168）で算出。</p>
+              </div>
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-gray-300 mb-2">使用ファンダメンタルズ指標</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><span className="text-gray-500">PER（株価収益率）:</span> 予想ベース</div>
+                  <div><span className="text-gray-500">PBR（株価純資産倍率）:</span> 実績ベース</div>
+                  <div><span className="text-gray-500">EPS成長率:</span> 前年比予想</div>
+                  <div><span className="text-gray-500">配当利回り:</span> 予想年間配当/現在株価</div>
+                  <div><span className="text-gray-500">信用倍率:</span> 買い残/売り残</div>
+                  <div><span className="text-gray-500">目標株価:</span> アナリストコンセンサス</div>
+                </div>
+              </div>
+              <div className="bg-rose-950/20 border border-rose-900/30 rounded-xl p-4">
+                <h3 className="text-sm font-bold text-rose-400 mb-2">⚠️ 免責事項</h3>
+                <p>本予測は統計的モデルに基づく参考情報であり、投資勧誘を目的としたものではありません。実際の投資判断はご自身の責任において行ってください。予測精度を保証するものではなく、市場環境の急変により大幅に乖離する可能性があります。</p>
+              </div>
+              <p className="text-[10px] text-gray-500">データ基準日: 2026年8月11日 | 出典: 各社IR適時開示、Bloomberg、Yahoo Finance、Investing.com</p>
+            </div>
+            <div className="flex justify-end pt-3 border-t border-gray-800 mt-3">
+              <button onClick={() => setShowSpec(false)} className="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl">閉じる</button>
             </div>
           </div>
         </div>
