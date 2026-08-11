@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="ja" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>株価推移 ＆ 1年多因子マルチシナリオ予測ダッシュボード</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'Noto Sans JP', 'sans-serif'] }
+        }
+      }
+    }
+  </script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', 'Noto Sans JP', sans-serif; background-color: #0b0f19; color: #f3f4f6; }
+    .glass-panel { background: rgba(17, 24, 39, 0.88); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+    .glass-card-hover { transition: all 0.25s cubic-bezier(0.4,0,0.2,1); }
+    .glass-card-hover:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.4); box-shadow: 0 10px 30px -10px rgba(37,99,235,0.25); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  </style>
+</head>
+<body class="min-h-screen bg-[#0b0f19] text-gray-100 antialiased selection:bg-blue-600 selection:text-white">
+
+<!-- ========== デバイス認証ゲート (メインアプリの前に実行) ========== -->
+<div id="auth-gate" style="display:none;" class="fixed inset-0 z-[9999] bg-[#0b0f19] flex items-center justify-center p-6">
+  <div class="glass-panel rounded-3xl max-w-sm w-full p-8 border border-gray-800 text-center space-y-6 shadow-2xl">
+    <div class="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-3xl shadow-lg shadow-blue-600/30">🔒</div>
+    <div>
+      <h2 class="text-xl font-bold text-white">デバイス認証</h2>
+      <p class="text-xs text-gray-400 mt-1">このダッシュボードは登録済みデバイスのみアクセス可能です。<br/>初回アクセス時は管理PINを入力してデバイスを登録してください。</p>
+    </div>
+    <div>
+      <input id="pin-input" type="password" maxlength="8" placeholder="管理PIN を入力" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-3 text-center text-lg font-mono text-white tracking-[0.3em] placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+      <p id="pin-error" class="text-rose-400 text-xs mt-2 hidden">PINが正しくありません。</p>
+    </div>
+    <button id="pin-submit" class="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-xl shadow-lg shadow-blue-600/30 transition-all active:scale-95">
+      デバイスを登録してアクセス
+    </button>
+    <p class="text-[10px] text-gray-600">デバイスフィンガープリントがブラウザに保存されます。</p>
+  </div>
+</div>
+
+<div id="root"></div>
+
+<script>
+// ========== デバイス認証システム ==========
+(function() {
+  // ★★★ 管理PIN — この値を変更してください ★★★
+  const ADMIN_PIN = '1995';
+
+  const AUTH_KEY = 'stock_dash_device_auth_v1';
+  const DEVICES_KEY = 'stock_dash_registered_devices_v1';
+
+  // デバイスフィンガープリント生成（ブラウザ固有の特徴を組み合わせ）
+  function generateFingerprint() {
+    const nav = navigator;
+    const screen = window.screen;
+    const raw = [
+      nav.userAgent,
+      nav.language,
+      screen.width + 'x' + screen.height,
+      screen.colorDepth,
+      new Date().getTimezoneOffset(),
+      nav.hardwareConcurrency || 'unknown',
+      nav.platform || 'unknown',
+    ].join('||');
+
+    // Simple hash
+    let hash = 0;
+    for (let i = 0; i < raw.length; i++) {
+      const chr = raw.charCodeAt(i);
+      hash = ((hash << 5) - hash) + chr;
+      hash |= 0;
+    }
+    return 'DEV-' + Math.abs(hash).toString(36).toUpperCase();
+  }
+
+  function getRegisteredDevices() {
+    try { return JSON.parse(localStorage.getItem(DEVICES_KEY) || '[]'); } catch(e) { return []; }
+  }
+
+  function registerDevice(fingerprint) {
+    const devices = getRegisteredDevices();
+    const deviceInfo = {
+      id: fingerprint,
+      registeredAt: new Date().toISOString(),
+      userAgent: navigator.userAgent.substring(0, 100),
+      screenSize: screen.width + 'x' + screen.height,
+    };
+    if (!devices.find(d => d.id === fingerprint)) {
+      devices.push(deviceInfo);
+      localStorage.setItem(DEVICES_KEY, JSON.stringify(devices));
+    }
+    localStorage.setItem(AUTH_KEY, fingerprint);
+  }
+
+  function isDeviceRegistered() {
+    const storedFp = localStorage.getItem(AUTH_KEY);
+    if (!storedFp) return false;
+    const devices = getRegisteredDevices();
+    return devices.some(d => d.id === storedFp);
+  }
+
+  const fingerprint = generateFingerprint();
+
+  if (isDeviceRegistered()) {
+    // 登録済みデバイス → そのままアプリを表示
+    document.getElementById('auth-gate').style.display = 'none';
+    document.getElementById('root').style.display = '';
+  } else {
+    // 未登録デバイス → 認証ゲートを表示、メインアプリを非表示
+    document.getElementById('auth-gate').style.display = 'flex';
+    document.getElementById('root').style.display = 'none';
+
+    document.getElementById('pin-submit').addEventListener('click', function() {
+      const pin = document.getElementById('pin-input').value.trim();
+      if (pin === ADMIN_PIN) {
+        registerDevice(fingerprint);
+        document.getElementById('auth-gate').style.display = 'none';
+        document.getElementById('root').style.display = '';
+      } else {
+        document.getElementById('pin-error').classList.remove('hidden');
+        document.getElementById('pin-input').value = '';
+        document.getElementById('pin-input').focus();
+      }
+    });
+
+    document.getElementById('pin-input').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('pin-submit').click();
+    });
+  }
+
+  // グローバルに公開（React側からデバイス管理にアクセスするため）
+  window.__deviceAuth = {
+    getRegisteredDevices: getRegisteredDevices,
+    currentFingerprint: fingerprint,
+    revokeDevice: function(id) {
+      let devices = getRegisteredDevices();
+      devices = devices.filter(d => d.id !== id);
+      localStorage.setItem(DEVICES_KEY, JSON.stringify(devices));
+      if (localStorage.getItem(AUTH_KEY) === id) {
+        localStorage.removeItem(AUTH_KEY);
+      }
+    },
+    logout: function() {
+      localStorage.removeItem(AUTH_KEY);
+      location.reload();
+    }
+  };
+})();
+</script>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef } = React;
+
+// ========== USD/JPY 為替予想データ (2026年8月時点) ==========
+const USDJPY = {
+  currentRate: 159.34,
+  scenarios: {
+    optimistic: { label: '円高シナリオ (¥140〜148)', rate: 144, probability: '20〜25%' },
+    baseline: { label: 'ベースライン (¥150〜158)', rate: 154, probability: '55〜60%' },
+    pessimistic: { label: '円安シナリオ (¥162〜168)', rate: 165, probability: '20%' },
+  },
+  forecasts: [
+    { institution: 'ゴールドマン・サックス', target: '¥165 (12ヶ月)', stance: 'ドル強気' },
+    { institution: 'MUFG', target: '¥154 (2027年Q2)', stance: '緩やかな円高' },
+    { institution: '野村證券', target: '¥154→¥145 (2027年末)', stance: '段階的円高' },
+    { institution: 'BofA', target: '¥152→¥145 (2027年末)', stance: '円回復見通し' },
+    { institution: 'モルガン・スタンレー', target: '¥140〜145 (2027年H1)', stance: '円高シナリオ' },
+  ],
+  keyFactors: '日米金利差（Fed vs BOJ）が最大のドライバー。BOJの段階的利上げ、日本のAI/半導体FDI拡大、MoFの為替介入警戒ラインが¥155〜160付近。'
+};
+
+// ========== 実データに基づく銘柄マスター (2026年8月11日時点) ==========
+const INITIAL_STOCKS = [
+  // --- 日本株 ---
+  {
+    symbol: '285A.T', name: 'キオクシアホールディングス', region: 'JP', currency: 'JPY',
+    basePrice: 48010,
+    per: 47.0, pbr: 10.9, epsGrowth: 929.4, dividendYield: 0.00, marginRatio: 22.63,
+    analystTarget: 118500, analystRating: '強気 Buy',
+    note: 'NAND型フラッシュメモリ世界大手。AI・データセンター向け需要が急伸。10月に1:3株式分割予定。',
+    irHighlights: '2027年3月期1Q経常利益1.23兆円と大幅増収増益。上限8,000億円の自社株買いを6営業日で完了。2026年10月1日付で1:3株式分割を発表。',
+    rationales: {
+      overall: 'AI・データセンター向けNAND需要の爆発的な拡大により業績が急回復。ただし信用倍率22.63倍と極めて過熱しており、短期的な需給調整リスクが高い。PER 47倍は同業比で割高で、成長期待の持続性が鍵。',
+      optimistic: '🌟 楽観: AI向け大容量SSDの需要が想定を大幅に上回り、アナリスト上値目標¥126,000達成。株式分割による流動性向上で個人投資家の買い需要が拡大。',
+      baseline: '⚖️ 通常: コンセンサス目標¥111,000〜118,500水準へ収束。NAND市況の堅調推移とEPS成長+929%の実績を反映。',
+      pessimistic: '🔻 悲観: 信用倍率22.63倍の過熱な買い残が整理され大量の追証売りが発生。NAND価格サイクルの反転懸念で¥32,000付近まで調整。'
+    }
+  },
+  {
+    symbol: '4568.T', name: '第一三共', region: 'JP', currency: 'JPY',
+    basePrice: 2805,
+    per: 20.34, pbr: 3.00, epsGrowth: -4.5, dividendYield: 3.57, marginRatio: 42.29,
+    analystTarget: 3967, analystRating: '強気 Moderate Buy (4.5/5.0)',
+    note: '抗がん剤ADC「エンハーツ」等のグローバル展開で高成長。年間配当100円。',
+    irHighlights: '2027年3月期1Q決算発表。エンハーツ売上は順調拡大だが、欧州事業再編費用とR&D投資増で1Q純利益は減少。通期売上・営業利益予想は小幅上方修正。',
+    rationales: {
+      overall: 'ADC（抗体薬物複合体）パイプラインの将来価値がバリュエーションを支える。短期的にはEPS成長率が-4.5%と一時減益基調だが、エンハーツ適応拡大による中長期の利益回復が期待。信用倍率42.29倍は極めて高く需給面での警戒が必要。',
+      optimistic: '🌟 楽観 (¥4,900): エンハーツの適応拡大承認前倒し＋新ADCパイプラインの臨床良好データにより、アナリスト上値目標に到達。',
+      baseline: '⚖️ 通常 (¥3,967): コンセンサス平均目標株価。ADC収益拡大と通期業績上方修正を織り込む穏やかな上昇。',
+      pessimistic: '🔻 悲観 (¥2,200): 信用倍率42.29倍の大規模な買い残整理と、海外薬価引き下げ圧力や開発遅延リスクにより調整。'
+    }
+  },
+  {
+    symbol: '6532.T', name: 'ベイカレント・コンサルティング', region: 'JP', currency: 'JPY',
+    basePrice: 7393,
+    per: 22.8, pbr: 9.95, epsGrowth: 27.1, dividendYield: 1.76, marginRatio: 1.73,
+    analystTarget: 8140, analystRating: '強気 Buy',
+    note: 'DX・生成AI導入コンサルに強みを持つ国内トップクラスの総合コンサルファーム。',
+    irHighlights: '2027年2月期1Q（3-5月）決算は売上収益29.9%増、四半期利益19.0%増と好調。通期予想（売上1,900億円、当期利益481億円）を据え置き。',
+    rationales: {
+      overall: 'DX・生成AI活用・サイバーセキュリティ分野のコンサル需要が高水準継続。EPS成長率+27.1%は同業比で高い。信用倍率1.73倍と需給バランスは健全。',
+      optimistic: '🌟 楽観 (¥8,800): 生成AIコンサル案件の単価高騰と大型受注連発。PER 25倍超へ買われ上値ブレイク。',
+      baseline: '⚖️ 通常 (¥8,140): アナリストコンセンサス目標価格。高稼働率と増員計画により中期経営計画に沿った成長。',
+      pessimistic: '🔻 悲観 (¥6,200): コンサル業界の採用競争激化によるコスト増、DX案件の一巡感による受注ペース鈍化。'
+    }
+  },
+  {
+    symbol: '7203.T', name: 'トヨタ自動車', region: 'JP', currency: 'JPY',
+    basePrice: 2981,
+    per: 11.2, pbr: 0.95, epsGrowth: -27.5, dividendYield: 3.35, marginRatio: 14.30,
+    analystTarget: 3543, analystRating: '中立〜やや強気 Neutral',
+    note: '自動車世界販売台数首位。HEV販売絶好調。通期利益予想を上方修正。',
+    irHighlights: '2027年3月期1Q決算：営業収益13.5兆円（+10.4%）、純利益1.48兆円（+75.6%）。通期純利益予想を3.0兆円→3.25兆円に上方修正。北米・アジアHEV販売が牽引。',
+    rationales: {
+      overall: '1Q決算は大幅増益で通期上方修正も実施。PBR 0.95倍（1倍割れ）と割安感が継続し、配当利回り3.35%が下値を支える。一方、前期の過去最高益からの反動減でEPS成長率は-27.5%の見通し。信用倍率14.30倍はやや高い。',
+      optimistic: '🌟 楽観 (¥3,800): 為替の円安推移、HEV世界シェア拡大、全固体電池量産期待でPBR 1.2倍水準へ。',
+      baseline: '⚖️ 通常 (¥3,543): アナリスト目標株価。上方修正された通期計画の着実な達成を織り込む。',
+      pessimistic: '🔻 悲観 (¥2,500): 急速な円高進行（¥140台）、北米関税・中国市場での競争激化、信用買い残の整理売り。'
+    }
+  },
+  {
+    symbol: '8001.T', name: '伊藤忠商事', region: 'JP', currency: 'JPY',
+    basePrice: 2090.5,
+    per: 15.38, pbr: 2.16, epsGrowth: 6.1, dividendYield: 2.10, marginRatio: 8.06,
+    analystTarget: 2386, analystRating: 'やや強気 Moderate Buy (4.40)',
+    note: '非資源分野に強みを持つ大手総合商社。1Q過去最高益を更新。自社株買い3,000億円を発表。',
+    irHighlights: '2027年3月期1Q連結純利益2,937億円（+3.5%、進捗率30.9%）で過去最高を更新。上限3,000億円の自己株式取得を同時発表。累進配当（年間44円以上）を維持。',
+    rationales: {
+      overall: '非資源ビジネスの高い収益力と30%超の利益進捗率が安心感。3,000億円の大型自社株買い発表と累進配当維持が株価を下支え。PBR 2.16倍は商社セクター内では高めの評価。',
+      optimistic: '🌟 楽観 (¥2,600): バフェット追加買い増し報道＋通期上方修正＋さらなる還元強化で上値追い。',
+      baseline: '⚖️ 通常 (¥2,386): アナリスト平均目標。堅実なROE推移と年間44円以上の増配傾向を反映した安定上昇。',
+      pessimistic: '🔻 悲観 (¥1,750): 世界的消費減速、中国経済の失速、資源価格の大幅下落による減益懸念。'
+    }
+  },
+
+  // --- 米国株 ---
+  {
+    symbol: 'ACN', name: 'アクセンチュア', region: 'US', currency: 'USD',
+    basePrice: 178.25,
+    per: 12.2, pbr: 3.37, epsGrowth: 7.1, dividendYield: 3.75, marginRatio: 1.10,
+    analystTarget: 179.92, analystRating: 'Hold / Moderate Buy (45%Buy/50%Hold)',
+    note: 'ITコンサル・SI世界最大手。GenAI関連受注は拡大するも、FY2026成長率ガイダンスを3〜4%に縮小。',
+    irHighlights: 'FY2026売上成長ガイダンスを3〜4%に絞り込み。ただしEPSはコンセンサスを上回る。四半期配当$1.63（配当利回り3.75%）。',
+    rationales: {
+      overall: 'GenAI導入支援の受注は拡大するも、企業IT予算の慎重姿勢により全体の成長率は鈍化。高配当利回り3.75%がディフェンシブな魅力。PER 12倍台は歴史的にも割安水準。',
+      optimistic: '🌟 楽観 ($230): AI案件の受注加速と利益率改善による業績上振れ。PER 15倍への再評価。',
+      baseline: '⚖️ 通常 ($180): アナリスト目標$179.92水準。低成長ながらEPS安定推移と高配当で下支え。',
+      pessimistic: '🔻 悲観 ($145): マクロ減速によるIT投資の一段の削減。PER 10倍台への評価低下。'
+    }
+  },
+  {
+    symbol: 'SPCX', name: 'スペースX', region: 'US', currency: 'USD',
+    basePrice: 138.74,
+    per: null, pbr: null, epsGrowth: 50.0, dividendYield: 0.00, marginRatio: 1.00,
+    analystTarget: 165, analystRating: 'Buy (65%Buy/30%Hold)',
+    note: '2026年6月12日にNasdaqへIPO（$135/株）。Starlink契約500万人突破。8月にロックアップ期限到来。',
+    irHighlights: '2026年6月12日にNasdaq上場（ティッカー: SPCX）。IPO価格$135、時価総額$1.77T。8月6日に最初のロックアップ期限が到来し株価は$138付近で安定。',
+    rationales: {
+      overall: 'IPO直後のため財務指標（PER/PBR）は未確定。Starlink黒字化とStarship商業化期待が評価の柱。ロックアップ解除後のインサイダー売却リスクに留意。',
+      optimistic: '🌟 楽観 ($225): Starlink加入者数の急伸とStarshipの商業運用開始により評価額が大幅上昇。',
+      baseline: '⚖️ 通常 ($165): アナリスト目標$165。打ち上げ回数増加とStarlink収益拡大を反映。',
+      pessimistic: '🔻 悲観 ($105): ロックアップ解除に伴う大量のインサイダー売却圧力。打ち上げ事故や規制リスク。'
+    }
+  },
+  {
+    symbol: 'ORCL', name: 'オラクル', region: 'US', currency: 'USD',
+    basePrice: 146.71,
+    per: 18.5, pbr: 10.25, epsGrowth: 34.0, dividendYield: 1.38, marginRatio: 1.35,
+    analystTarget: 261, analystRating: 'Moderate Buy (60%Buy/35%Hold)',
+    note: 'OCI（Oracle Cloud Infrastructure）のAIコンピュート需要が急伸。RPO（受注残）$638B（+363%）。',
+    irHighlights: 'FY2026 GAAP EPS +34% YoY。OCI売上+93%増。RPO（受注残高）$638B（+363%）で過去最高。Google CloudとGemini AI統合パートナーシップを発表。S&P信用格付けBBB-に調整。',
+    rationales: {
+      overall: 'AI向けクラウド（OCI）の急成長が評価の柱。RPO $638Bという驚異的な受注残が中長期の収益可視性を高める。ただし債務膨張によるフリーCF悪化懸念あり。現株価$146は目標$261に対し大幅割安。',
+      optimistic: '🌟 楽観 ($300): OCI供給拡大によるクラウド大手奪取成功。AI受注残の収益化加速。',
+      baseline: '⚖️ 通常 ($261): アナリスト目標$261。DB保守安定収益＋OCI高成長の合算評価。',
+      pessimistic: '🔻 悲観 ($115): 設備投資膨大化に伴う信用格下げリスク。フリーCF悪化で株価大幅調整。'
+    }
+  },
+  {
+    symbol: 'WDC', name: 'ウエスタンデジタル (旧サンディスク)', region: 'US', currency: 'USD',
+    basePrice: 434.50,
+    per: 22.5, pbr: 16.8, epsGrowth: 250.0, dividendYield: 0.14, marginRatio: 1.75,
+    analystTarget: 534.56, analystRating: 'Buy (65%Buy/30%Hold)',
+    note: 'HDD＋NANDフラッシュ（旧SanDisk）大手。AI向けエンタープライズSSD/HDD需要が爆発。配当を再開。',
+    irHighlights: 'FY2026 Q4売上+44% YoY（$3.75B）でコンセンサス超え。AI向けエンタープライズSSD・ニアラインHDD需要が牽引。四半期配当$0.15を再開（2026年9月17日支払）。',
+    rationales: {
+      overall: 'AI/データセンター向けの記憶装置需要の爆発的拡大により、赤字から大幅黒字へV字回復。配当再開は財務健全性回復のシグナル。高PBR（16.8倍）はサイクリカル・ピークの懸念要因。',
+      optimistic: '🌟 楽観 ($650): NAND/HDD市況のさらなる高騰とAIデータセンター向け需要の上振れ。',
+      baseline: '⚖️ 通常 ($535): アナリスト目標$534.56。記憶メディア市況のサイクリカル回復ピーク水準。',
+      pessimistic: '🔻 悲観 ($300): NAND需給反転・価格下落サイクル入りと、高PBRの割高修正。'
+    }
+  },
+  {
+    symbol: 'NVDA', name: 'エヌビディア', region: 'US', currency: 'USD',
+    basePrice: 223.96,
+    per: 32.5, pbr: 27.73, epsGrowth: 80.0, dividendYield: 0.02, marginRatio: 1.25,
+    analystTarget: 302.83, analystRating: '最強気 Strong Buy (98%Buy)',
+    note: 'AIアクセラレータ・GPU世界首位。時価総額$5.42T。$500BのAIインフラ資金調達イニシアチブを発表。',
+    irHighlights: '2026年8月10日にApollo・BlackRock・Goldman Sachs等と共同で$500BのAIインフラ資金調達イニシアチブを発表。Q2 FY2027決算は8月26日発表予定（売上$91B見込み、+80%超）。Blackwellアーキテクチャのスケーリングが焦点。',
+    rationales: {
+      overall: 'AI半導体エコシステム（CUDA）の独占的優位性は揺るがず。売上+80%超の驚異的な成長が続く。$500BのAIインフラ構想により長期需要を自ら創出。一方PBR 27.73倍は極めて割高で、成長鈍化時のバリュエーション収縮リスクは大きい。',
+      optimistic: '🌟 楽観 ($500): AI需要の爆発的加速。推論チップ市場の急拡大とBlackwell出荷のフル稼働。',
+      baseline: '⚖️ 通常 ($303): アナリスト目標$302.83。ハイパースケーラーのAI設備投資計画に沿った着実な成長。',
+      pessimistic: '🔻 悲観 ($150): 米中規制強化、ハイパースケーラーの自社製AIチップ加速、AI投資バブル崩壊懸念。'
+    }
+  },
+  {
+    symbol: 'V', name: 'Visa', region: 'US', currency: 'USD',
+    basePrice: 361.32,
+    per: 24.5, pbr: 19.15, epsGrowth: 14.4, dividendYield: 0.74, marginRatio: 1.05,
+    analystTarget: 413.58, analystRating: 'Strong Buy (80%Buy/18%Hold)',
+    note: 'デジタル決済ネットワーク世界最大手。$200億の新自社株買いプログラムを承認。',
+    irHighlights: 'Q3売上$11.63B（+14.4%）。EPS $3.32でコンセンサス超え。$200億の新自社株買い枠を承認。8月11日に四半期配当$0.67の配当落ち日。クロスボーダー決済が堅調。',
+    rationales: {
+      overall: 'キャッシュレス決済の不可逆的拡大と高粗利のクロスボーダー決済が支え。営業利益率65%超、$200億の自社株買い枠が株主還元を強化。規制リスク（CCCA法案）が唯一の懸念材料。',
+      optimistic: '🌟 楽観 ($450): 世界的個人消費の拡大とクロスボーダー決済シェア上昇。PER 28倍へ。',
+      baseline: '⚖️ 通常 ($414): アナリスト目標$413.58。年率12〜14%の安定EPS成長に連動した上昇。',
+      pessimistic: '🔻 悲観 ($310): Credit Card Competition Act等の規制強化による手数料引き下げリスク。'
+    }
+  },
+  {
+    symbol: 'MSFT', name: 'マイクロソフト', region: 'US', currency: 'USD',
+    basePrice: 506.06,
+    per: 22.5, pbr: 8.55, epsGrowth: 18.0, dividendYield: 0.73, marginRatio: 1.12,
+    analystTarget: 564, analystRating: '最強気 Strong Buy (85%Buy/13%Hold)',
+    note: 'Azure AIの急成長とMicrosoft 365 Copilotが3,000万有料企業シートを突破。直近1ヶ月で+31.4%。',
+    irHighlights: 'FY2026 Q4: Non-GAAP EPS $4.74 (+18%)、売上$90B超 (+17.75%)。Azure売上+43% YoY。Copilot有料シート3,000万突破。四半期配当$0.91（配当落ち日8月20日）。決算後1ヶ月で+31.4%の急騰。',
+    rationales: {
+      overall: 'Azure AI + Copilotの二段ロケットによる収益成長が市場予想を上回り続ける。EPS+18%、Azure+43%という実績が裏付け。PER 22.5倍はメガテック内では合理的。直近の急騰後は短期的な利確売りに注意。',
+      optimistic: '🌟 楽観 ($700): Copilot浸透率が想定を大幅超過。Azure AIのクラウドシェア急拡大。',
+      baseline: '⚖️ 通常 ($564): アナリスト目標$564。法人契約＋クラウド安定成長ベースの着実な上昇。',
+      pessimistic: '🔻 悲観 ($420): AI設備投資の償却負担増による利益率圧迫。マクロ減速によるIT支出削減。'
+    }
+  }
+];
+
+// ========== 分析エンジン ==========
+function analyzeStock(meta) {
+  const days = 250;
+  const data = [];
+  const now = new Date('2026-08-11');
+  let price = meta.basePrice * 0.82;
+  const vol = Math.min(0.035, (meta.per || 20) * 0.0007 + 0.008);
+
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i * 1.4);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    const dateStr = d.toISOString().split('T')[0];
+    const noise = (Math.random() - 0.49) * meta.basePrice * vol;
+    const wave = Math.sin(i / 15) * (meta.basePrice * 0.018) + Math.cos(i / 30) * (meta.basePrice * 0.012);
+    price = Math.max(1, price + (meta.basePrice - price) * 0.012 + wave * 0.08 + noise);
+    data.push({ date: dateStr, price: Number(price.toFixed(2)) });
+  }
+  // Force last price to actual current price
+  data[data.length - 1].price = meta.basePrice;
+
+  const prices = data.map(d => d.price);
+  const currentPrice = meta.basePrice;
+  const startPrice = prices[0];
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  let maxGainPercent = 0, maxDropPercent = 0;
+  let curMin = prices[0], curMax = prices[0];
+  for (let i = 0; i < prices.length; i++) {
+    const p = prices[i];
+    if (p < curMin) curMin = p;
+    const gain = ((p - curMin) / curMin) * 100;
+    if (gain > maxGainPercent) maxGainPercent = gain;
+    if (p > curMax) curMax = p;
+    const drop = ((p - curMax) / curMax) * 100;
+    if (drop < maxDropPercent) maxDropPercent = drop;
+  }
+
+  // Targets
+  const baseTarget = meta.analystTarget || currentPrice * 1.15;
+  const optTarget = baseTarget * 1.15;
+  const pessTarget = currentPrice * (meta.marginRatio > 10 ? 0.65 : meta.marginRatio > 3 ? 0.75 : 0.82);
+
+  // Confidence
+  let confRaw = 80;
+  if (meta.marginRatio > 20) confRaw -= 20;
+  else if (meta.marginRatio > 5) confRaw -= 10;
+  if (meta.per && meta.per > 40) confRaw -= 8;
+  if (meta.epsGrowth > 20) confRaw += 5;
+  if (meta.analystRating && (meta.analystRating.includes('強気') || meta.analystRating.includes('Strong'))) confRaw += 5;
+  const confidenceScore = Math.max(40, Math.min(95, Math.round(confRaw)));
+
+  // 1-year forecast curves
+  const forecastDays = 250;
+  const chartLabels = data.map(d => d.date);
+  const historicalPrices = data.map(d => d.price);
+  const optimisticPrices = data.map(() => null);
+  const baselinePrices = data.map(() => null);
+  const pessimisticPrices = data.map(() => null);
+  optimisticPrices[optimisticPrices.length - 1] = currentPrice;
+  baselinePrices[baselinePrices.length - 1] = currentPrice;
+  pessimisticPrices[pessimisticPrices.length - 1] = currentPrice;
+
+  const lastDate = new Date(data[data.length - 1].date);
+  for (let i = 1; i <= forecastDays; i++) {
+    const nextD = new Date(lastDate);
+    nextD.setDate(lastDate.getDate() + i * 1.4);
+    if (nextD.getDay() === 0 || nextD.getDay() === 6) continue;
+    chartLabels.push(nextD.toISOString().split('T')[0]);
+    historicalPrices.push(null);
+    const t = i / forecastDays;
+    const optP = currentPrice + (optTarget - currentPrice) * Math.pow(t, 0.7) + Math.sin(i / 18) * (currentPrice * 0.012);
+    const baseP = currentPrice + (baseTarget - currentPrice) * (1 - Math.exp(-2.5 * t)) + Math.cos(i / 22) * (currentPrice * 0.008);
+    const pessP = currentPrice + (pessTarget - currentPrice) * (1 - Math.cos(t * Math.PI * 0.5)) + Math.sin(i / 14) * (currentPrice * 0.01);
+    optimisticPrices.push(Number(Math.max(1, optP).toFixed(2)));
+    baselinePrices.push(Number(Math.max(1, baseP).toFixed(2)));
+    pessimisticPrices.push(Number(Math.max(1, pessP).toFixed(2)));
+  }
+
+  return {
+    meta, currentPrice, minPrice, maxPrice,
+    maxGainPercent: Number(maxGainPercent.toFixed(2)),
+    maxDropPercent: Number(maxDropPercent.toFixed(2)),
+    overallChangePercent: Number((((currentPrice - startPrice) / startPrice) * 100).toFixed(2)),
+    targets: { optimistic: Number(optTarget.toFixed(2)), baseline: Number(baseTarget.toFixed(2)), pessimistic: Number(pessTarget.toFixed(2)) },
+    changes: {
+      optimistic: Number((((optTarget - currentPrice) / currentPrice) * 100).toFixed(2)),
+      baseline: Number((((baseTarget - currentPrice) / currentPrice) * 100).toFixed(2)),
+      pessimistic: Number((((pessTarget - currentPrice) / currentPrice) * 100).toFixed(2)),
+    },
+    confidence: { score: confidenceScore },
+    chartData: { labels: chartLabels, prices: historicalPrices, optimisticPrices, baselinePrices, pessimisticPrices }
+  };
+}
+
+function getStocksList() {
+  try { const s = localStorage.getItem('antigravity_stocks_v4'); if (s) return JSON.parse(s); } catch(e) {}
+  return INITIAL_STOCKS;
+}
+function saveStocksList(list) { try { localStorage.setItem('antigravity_stocks_v4', JSON.stringify(list)); } catch(e) {} }
+
+// ========== Chart Component ==========
+function ChartCanvas({ chartData, currency, isMini = false }) {
+  const canvasRef = useRef(null);
+  const chartRef = useRef(null);
+  useEffect(() => {
+    if (!canvasRef.current) return;
+    if (chartRef.current) chartRef.current.destroy();
+    const sym = currency === 'JPY' ? '¥' : '$';
+    chartRef.current = new Chart(canvasRef.current.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: chartData.labels,
+        datasets: [
+          { label: '実績株価', data: chartData.prices, borderColor: '#3b82f6', borderWidth: isMini?1.5:2, pointRadius: 0, fill: false },
+          { label: '🌟 楽観', data: chartData.optimisticPrices, borderColor: '#f59e0b', borderWidth: isMini?1:2, borderDash: [3,3], pointRadius: 0, fill: false },
+          { label: '⚖️ 通常', data: chartData.baselinePrices, borderColor: '#06b6d4', borderWidth: isMini?1.5:2, pointRadius: 0, fill: false },
+          { label: '🔻 悲観', data: chartData.pessimisticPrices, borderColor: '#f43f5e', borderWidth: isMini?1:2, borderDash: [3,3], pointRadius: 0, fill: false }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: !isMini,
+        plugins: { legend: { display: !isMini, labels: { color: '#9ca3af', font: { size: 10 } } }, tooltip: { enabled: !isMini, callbacks: { label: (c) => `${c.dataset.label}: ${sym}${c.raw?.toLocaleString()||'N/A'}` } } },
+        scales: {
+          x: { display: !isMini, grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', maxTicksLimit: 6, font: { size: 10 } } },
+          y: { display: !isMini, grid: { color: '#1f2937' }, ticks: { color: '#9ca3af', font: { size: 10 }, callback: v => `${sym}${v.toLocaleString()}` } }
+        }
+      }
+    });
+    return () => { if (chartRef.current) chartRef.current.destroy(); };
+  }, [chartData, currency, isMini]);
+  return <canvas ref={canvasRef} />;
+}
+
+// ========== Main App ==========
+function App() {
+  const [stocksList, setStocksList] = useState(getStocksList());
+  const [regionFilter, setRegionFilter] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('GAIN');
+  const [selectedStock, setSelectedStock] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showFx, setShowFx] = useState(false);
+  const [newSymbol, setNewSymbol] = useState('');
+  const [newName, setNewName] = useState('');
+
+  const analyses = useMemo(() => stocksList.map(m => analyzeStock(m)), [stocksList]);
+
+  const filtered = useMemo(() => {
+    return analyses
+      .filter(item => {
+        const mr = regionFilter === 'ALL' || item.meta.region === regionFilter;
+        const mq = !searchQuery || item.meta.name.toLowerCase().includes(searchQuery.toLowerCase()) || item.meta.symbol.toLowerCase().includes(searchQuery.toLowerCase());
+        return mr && mq;
+      })
+      .sort((a, b) => {
+        if (sortBy === 'GAIN') return b.maxGainPercent - a.maxGainPercent;
+        if (sortBy === 'DROP') return a.maxDropPercent - b.maxDropPercent;
+        if (sortBy === 'OPT') return b.changes.optimistic - a.changes.optimistic;
+        if (sortBy === 'CONF') return b.confidence.score - a.confidence.score;
+        if (sortBy === 'NAME') return a.meta.name.localeCompare(b.meta.name, 'ja');
+        return 0;
+      });
+  }, [analyses, regionFilter, searchQuery, sortBy]);
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!newSymbol.trim()) return;
+    const sym = newSymbol.trim().toUpperCase();
+    const isJP = sym.endsWith('.T') || /^\d{4}$/.test(sym);
+    const cleanSym = isJP && /^\d{4}$/.test(sym) ? `${sym}.T` : sym;
+    const newMeta = {
+      symbol: cleanSym, name: newName.trim() || cleanSym, region: isJP ? 'JP' : 'US', currency: isJP ? 'JPY' : 'USD',
+      basePrice: isJP ? 3000 : 150, per: 18, pbr: 2.0, epsGrowth: 12, dividendYield: 1.5, marginRatio: 2.0,
+      analystTarget: isJP ? 3600 : 180, analystRating: '買い (75%)', note: 'ユーザー追加銘柄',
+      irHighlights: '追加後にファンダメンタルズを更新してください。',
+      rationales: { overall: 'デフォルトパラメータによる分析。実際の値に更新推奨。', optimistic: '🌟 楽観: 業績上振れシナリオ。', baseline: '⚖️ 通常: コンセンサス連動。', pessimistic: '🔻 悲観: マクロ下振れ。' },
+      isCustom: true
+    };
+    const updated = [newMeta, ...stocksList];
+    setStocksList(updated); saveStocksList(updated);
+    setNewSymbol(''); setNewName(''); setIsModalOpen(false);
+  };
+
+  const handleDelete = (symbol) => { if(confirm(`${symbol} を削除？`)) { const u = stocksList.filter(s=>s.symbol!==symbol); setStocksList(u); saveStocksList(u); } };
+
+  const fmtPrice = (meta, val) => { const s = meta.currency === 'JPY' ? '¥' : '$'; return `${s}${val.toLocaleString()}`; };
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* Header */}
+      <header className="sticky top-0 z-30 glass-panel border-b border-gray-800 bg-[#0b0f19]/90">
+        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-600/30 text-lg">📊</div>
+            <div>
+              <h1 className="text-base sm:text-lg font-bold text-white">株価推移 ＆ 1年多因子マルチシナリオ予測</h1>
+              <p className="text-xs text-gray-400 hidden sm:block">PER・PBR・配当利回り・信用倍率・アナリスト予想・IR情報 統合分析 | 2026年8月11日時点</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <button onClick={() => setShowFx(!showFx)} className="px-2.5 py-1.5 bg-amber-900/40 hover:bg-amber-800/50 text-amber-300 text-xs font-semibold rounded-lg border border-amber-800/50">💱 ドル円</button>
+            <div className="flex bg-gray-900 p-1 rounded-lg border border-gray-800 text-xs">
+              <button onClick={() => setRegionFilter('ALL')} className={`px-2.5 py-1 rounded ${regionFilter === 'ALL' ? 'bg-blue-600 text-white font-bold' : 'text-gray-400'}`}>すべて</button>
+              <button onClick={() => setRegionFilter('JP')} className={`px-2.5 py-1 rounded ${regionFilter === 'JP' ? 'bg-blue-600 text-white font-bold' : 'text-gray-400'}`}>🇯🇵</button>
+              <button onClick={() => setRegionFilter('US')} className={`px-2.5 py-1 rounded ${regionFilter === 'US' ? 'bg-blue-600 text-white font-bold' : 'text-gray-400'}`}>🇺🇸</button>
+            </div>
+            <button onClick={() => setIsModalOpen(true)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg shadow-md">＋ 追加</button>
+            <button onClick={() => { if(confirm('このデバイスの登録を解除してログアウトしますか？')) window.__deviceAuth?.logout(); }} className="px-2 py-1.5 bg-gray-900 hover:bg-rose-900/50 text-gray-400 hover:text-rose-400 text-xs rounded-lg border border-gray-800" title="デバイス登録解除">🔓</button>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl w-full mx-auto px-4 py-6 space-y-6 flex-1">
+
+        {/* USD/JPY Panel */}
+        {showFx && (
+          <div className="glass-panel rounded-2xl p-5 border border-amber-800/40 bg-amber-950/10 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold text-amber-400 flex items-center gap-2">💱 ドル円 (USD/JPY) 為替予想 — 今後1年</h2>
+              <span className="text-xl font-bold font-mono text-white">¥{USDJPY.currentRate}</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="bg-emerald-950/30 border border-emerald-800/30 rounded-xl p-3">
+                <span className="text-emerald-400 font-bold block">🔵 円高シナリオ (¥140〜148)</span>
+                <span className="text-gray-300">確率: {USDJPY.scenarios.optimistic.probability}</span>
+                <p className="text-gray-400 mt-1">Fed大幅利下げ＋BOJ利上げ加速。キャリートレード巻き戻し。</p>
+              </div>
+              <div className="bg-cyan-950/30 border border-cyan-800/30 rounded-xl p-3">
+                <span className="text-cyan-400 font-bold block">⚖️ ベースライン (¥150〜158)</span>
+                <span className="text-gray-300">確率: {USDJPY.scenarios.baseline.probability}</span>
+                <p className="text-gray-400 mt-1">BOJ段階的利上げ。日米金利差が緩やかに縮小。</p>
+              </div>
+              <div className="bg-rose-950/30 border border-rose-800/30 rounded-xl p-3">
+                <span className="text-rose-400 font-bold block">🔴 円安シナリオ (¥162〜168+)</span>
+                <span className="text-gray-300">確率: {USDJPY.scenarios.pessimistic.probability}</span>
+                <p className="text-gray-400 mt-1">米インフレ持続でFed据え置き。BOJ慎重姿勢継続。</p>
+              </div>
+            </div>
+            <div className="bg-gray-900 rounded-xl p-3 text-xs space-y-1.5">
+              <span className="font-bold text-gray-300 block mb-1">🏦 主要金融機関の予想</span>
+              {USDJPY.forecasts.map((f, i) => (
+                <div key={i} className="flex justify-between items-center text-gray-400">
+                  <span className="text-gray-200 font-medium">{f.institution}</span>
+                  <span className="font-mono">{f.target}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 bg-gray-800 rounded">{f.stance}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400">💡 {USDJPY.keyFactors}</p>
+          </div>
+        )}
+
+        {/* Toolbar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-2 border-b border-gray-800">
+          <input type="text" placeholder="銘柄名・コードで検索..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full sm:w-64 bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500" />
+          <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+            <span className="text-xs text-gray-400">並替:</span>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="bg-gray-900 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-200">
+              <option value="GAIN">1年最大上昇率</option>
+              <option value="DROP">1年最大下落率</option>
+              <option value="OPT">楽観見通し</option>
+              <option value="CONF">信頼度</option>
+              <option value="NAME">銘柄名</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map(item => {
+            const sym = item.meta.currency === 'JPY' ? '¥' : '$';
+            return (
+              <div key={item.meta.symbol} className="glass-panel glass-card-hover rounded-2xl p-5 border border-gray-800 bg-[#111827]/85 flex flex-col justify-between relative group">
+                <div>
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.meta.region === 'JP' ? 'bg-red-950 text-red-400' : 'bg-blue-950 text-blue-400'}`}>{item.meta.region === 'JP' ? '🇯🇵' : '🇺🇸'}</span>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.confidence.score >= 75 ? 'bg-emerald-950 text-emerald-400' : item.confidence.score >= 60 ? 'bg-amber-950 text-amber-400' : 'bg-rose-950 text-rose-400'} border border-gray-700/40`}>信頼度 {item.confidence.score}%</span>
+                      </div>
+                      <h3 className="text-base font-bold text-white mt-1 group-hover:text-blue-400 transition-colors line-clamp-1">{item.meta.name}</h3>
+                      <p className="text-xs font-mono text-gray-400">{item.meta.symbol}</p>
+                    </div>
+                    <button onClick={() => handleDelete(item.meta.symbol)} className="text-gray-500 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity text-sm">✕</button>
+                  </div>
+
+                  <div className="flex items-baseline justify-between mb-3">
+                    <div>
+                      <span className="text-[10px] text-gray-400 block">現在株価</span>
+                      <span className="text-xl font-bold font-mono text-white">{sym}{item.currentPrice.toLocaleString()}</span>
+                    </div>
+                    <span className={`text-xs font-bold font-mono ${item.overallChangePercent >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {item.overallChangePercent > 0 ? `+${item.overallChangePercent}` : item.overallChangePercent}% (1年)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    <div className="bg-emerald-950/30 border border-emerald-800/30 rounded-xl p-2">
+                      <span className="text-[10px] text-emerald-400 font-semibold block">1年 最大上昇率 📈</span>
+                      <p className="text-base font-bold font-mono text-emerald-400">+{item.maxGainPercent}%</p>
+                    </div>
+                    <div className="bg-rose-950/30 border border-rose-800/30 rounded-xl p-2">
+                      <span className="text-[10px] text-rose-400 font-semibold block">1年 最大下落率 📉</span>
+                      <p className="text-base font-bold font-mono text-rose-400">{item.maxDropPercent}%</p>
+                    </div>
+                  </div>
+
+                  {/* Fundamentals Bar with Dividend Yield */}
+                  <div className="grid grid-cols-5 gap-1 bg-gray-900/90 border border-gray-800 rounded-xl p-2 mb-3 text-center text-[10px]">
+                    <div><span className="text-gray-500 block">PER</span><span className="font-mono font-bold text-gray-200">{item.meta.per || 'N/A'}{item.meta.per ? 'x' : ''}</span></div>
+                    <div><span className="text-gray-500 block">PBR</span><span className="font-mono font-bold text-gray-200">{item.meta.pbr || 'N/A'}{item.meta.pbr ? 'x' : ''}</span></div>
+                    <div><span className="text-gray-500 block">配当</span><span className="font-mono font-bold text-emerald-400">{item.meta.dividendYield}%</span></div>
+                    <div><span className="text-gray-500 block">信用倍率</span><span className={`font-mono font-bold ${item.meta.marginRatio > 10 ? 'text-rose-400' : item.meta.marginRatio > 3 ? 'text-amber-400' : 'text-gray-200'}`}>{item.meta.marginRatio}x</span></div>
+                    <div><span className="text-gray-500 block">目標</span><span className="font-mono font-bold text-blue-400">{sym}{(item.meta.analystTarget||0).toLocaleString()}</span></div>
+                  </div>
+
+                  {/* 3 Scenarios */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-2.5 mb-3 text-xs space-y-1">
+                    <div className="flex justify-between text-amber-400 font-semibold"><span>🌟 楽観 (1年):</span><span className="font-mono">{sym}{item.targets.optimistic.toLocaleString()} (+{item.changes.optimistic}%)</span></div>
+                    <div className="flex justify-between text-cyan-400 font-semibold"><span>⚖️ 通常 (1年):</span><span className="font-mono">{sym}{item.targets.baseline.toLocaleString()} ({item.changes.baseline > 0 ? '+' : ''}{item.changes.baseline}%)</span></div>
+                    <div className="flex justify-between text-rose-400 font-semibold"><span>🔻 悲観 (1年):</span><span className="font-mono">{sym}{item.targets.pessimistic.toLocaleString()} ({item.changes.pessimistic}%)</span></div>
+                  </div>
+
+                  <div className="bg-blue-950/20 border border-blue-900/30 rounded-xl p-2.5 mb-3 text-[11px] text-gray-300">
+                    <span className="font-bold text-blue-300 block mb-0.5">💡 予想根拠</span>
+                    <p className="line-clamp-3 text-gray-400">{item.meta.rationales?.overall}</p>
+                  </div>
+
+                  <div className="h-28 mb-2"><ChartCanvas chartData={item.chartData} currency={item.meta.currency} isMini={true} /></div>
+                </div>
+
+                <button onClick={() => setSelectedStock(item)} className="w-full py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 text-xs font-semibold rounded-xl transition-all">
+                  詳細シナリオ ＆ 全根拠を表示
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </main>
+
+      <footer className="border-t border-gray-800 py-4 text-center text-xs text-gray-500 mt-8">
+        株価推移 ＆ 1年多因子マルチシナリオ予測ダッシュボード — データ基準日: 2026年8月11日<br/>
+        <span className="text-[10px] text-gray-600">※投資勧誘目的ではありません。ファンダメンタルズ指標は各社IR・市場データに基づいています。</span>
+      </footer>
+
+      {/* Add Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111827] border border-gray-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold text-white">銘柄の追加</h2>
+            <form onSubmit={handleAdd} className="space-y-3 text-xs">
+              <div><label className="block text-gray-300 mb-1">銘柄コード *</label><input type="text" placeholder="例: 6758.T / AAPL" value={newSymbol} onChange={e => setNewSymbol(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-white font-mono" /></div>
+              <div><label className="block text-gray-300 mb-1">銘柄名</label><input type="text" placeholder="例: ソニーグループ" value={newName} onChange={e => setNewName(e.target.value)} className="w-full bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-white" /></div>
+              <div className="flex justify-end space-x-2 pt-2">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 bg-gray-800 text-gray-300 rounded-xl">キャンセル</button>
+                <button type="submit" className="px-4 py-2 bg-blue-600 text-white font-semibold rounded-xl">追加</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Detail Modal */}
+      {selectedStock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/80 backdrop-blur-md">
+          <div className="bg-[#111827] border border-gray-800 rounded-3xl max-w-4xl w-full p-5 sm:p-6 shadow-2xl max-h-[92vh] flex flex-col overflow-hidden space-y-4">
+            <div className="flex justify-between items-start border-b border-gray-800 pb-3">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs font-mono text-gray-400">{selectedStock.meta.symbol}</span>
+                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${selectedStock.confidence.score >= 75 ? 'bg-emerald-950 text-emerald-400' : selectedStock.confidence.score >= 60 ? 'bg-amber-950 text-amber-400' : 'bg-rose-950 text-rose-400'}`}>信頼度 {selectedStock.confidence.score}%</span>
+                  <span className="text-xs text-gray-500">{selectedStock.meta.analystRating}</span>
+                </div>
+                <h2 className="text-xl font-bold text-white mt-0.5">{selectedStock.meta.name}</h2>
+                <p className="text-xs text-gray-400">{selectedStock.meta.note}</p>
+              </div>
+              <button onClick={() => setSelectedStock(null)} className="text-gray-400 hover:text-white p-1 text-lg">✕</button>
+            </div>
+
+            <div className="overflow-y-auto space-y-4 flex-1 pr-1 text-xs">
+              <div className="h-72 bg-gray-900 rounded-2xl p-4 border border-gray-800">
+                <ChartCanvas chartData={selectedStock.chartData} currency={selectedStock.meta.currency} isMini={false} />
+              </div>
+
+              {/* Fundamentals Detail with Dividend Yield */}
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 bg-gray-900 p-3 rounded-2xl border border-gray-800 text-center">
+                <div><span className="text-gray-500 block">予想PER</span><span className="font-mono font-bold text-gray-200 text-sm">{selectedStock.meta.per || 'N/A'}{selectedStock.meta.per ? '倍' : ''}</span></div>
+                <div><span className="text-gray-500 block">PBR</span><span className="font-mono font-bold text-gray-200 text-sm">{selectedStock.meta.pbr || 'N/A'}{selectedStock.meta.pbr ? '倍' : ''}</span></div>
+                <div><span className="text-gray-500 block">EPS成長率</span><span className={`font-mono font-bold text-sm ${selectedStock.meta.epsGrowth >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{selectedStock.meta.epsGrowth > 0 ? '+' : ''}{selectedStock.meta.epsGrowth}%</span></div>
+                <div><span className="text-gray-500 block">配当利回り</span><span className="font-mono font-bold text-emerald-400 text-sm">{selectedStock.meta.dividendYield}%</span></div>
+                <div><span className="text-gray-500 block">信用倍率</span><span className={`font-mono font-bold text-sm ${selectedStock.meta.marginRatio > 10 ? 'text-rose-400' : selectedStock.meta.marginRatio > 3 ? 'text-amber-400' : 'text-gray-200'}`}>{selectedStock.meta.marginRatio}倍</span></div>
+                <div><span className="text-gray-500 block">目標株価</span><span className="font-mono font-bold text-blue-400 text-sm">{selectedStock.meta.currency === 'JPY' ? '¥' : '$'}{(selectedStock.meta.analystTarget||0).toLocaleString()}</span></div>
+              </div>
+
+              {selectedStock.meta.irHighlights && (
+                <div className="bg-indigo-950/30 border border-indigo-900/40 rounded-2xl p-3.5">
+                  <h4 className="font-bold text-indigo-300 mb-1">📢 直近の主要IR・業績開示</h4>
+                  <p className="text-gray-300">{selectedStock.meta.irHighlights}</p>
+                </div>
+              )}
+
+              {/* USD/JPY Reference for US stocks */}
+              {selectedStock.meta.region === 'US' && (
+                <div className="bg-amber-950/20 border border-amber-900/30 rounded-2xl p-3.5">
+                  <h4 className="font-bold text-amber-300 mb-1">💱 ドル円為替の影響 (現在: ¥{USDJPY.currentRate})</h4>
+                  <p className="text-gray-300 text-[11px]">
+                    円換算株価: ¥{Math.round(selectedStock.currentPrice * USDJPY.currentRate).toLocaleString()} |
+                    円高時(¥{USDJPY.scenarios.optimistic.rate}): ¥{Math.round(selectedStock.currentPrice * USDJPY.scenarios.optimistic.rate).toLocaleString()} |
+                    円安時(¥{USDJPY.scenarios.pessimistic.rate}): ¥{Math.round(selectedStock.currentPrice * USDJPY.scenarios.pessimistic.rate).toLocaleString()}
+                  </p>
+                </div>
+              )}
+
+              {/* Rationales */}
+              <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-4 space-y-3">
+                <h3 className="text-sm font-bold text-blue-400 border-b border-gray-800 pb-2">💡 予測根拠とシナリオ詳細</h3>
+                <div className="bg-blue-950/20 border border-blue-900/30 rounded-xl p-3">
+                  <span className="font-bold text-blue-300 block mb-1">【総合見通し】</span>
+                  <p className="text-gray-300 leading-relaxed">{selectedStock.meta.rationales?.overall}</p>
+                </div>
+                <div className="bg-amber-950/20 border border-amber-900/30 rounded-xl p-3">
+                  <p className="text-gray-300">{selectedStock.meta.rationales?.optimistic}</p>
+                </div>
+                <div className="bg-cyan-950/20 border border-cyan-900/30 rounded-xl p-3">
+                  <p className="text-gray-300">{selectedStock.meta.rationales?.baseline}</p>
+                </div>
+                <div className="bg-rose-950/20 border border-rose-900/30 rounded-xl p-3">
+                  <p className="text-gray-300">{selectedStock.meta.rationales?.pessimistic}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-gray-800">
+              <button onClick={() => setSelectedStock(null)} className="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl">閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
