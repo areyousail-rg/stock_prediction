@@ -168,7 +168,7 @@ const { useState, useEffect, useMemo, useRef } = React;
 
 // ========== USD/JPY 為替予想データ (2026年8月時点) ==========
 const USDJPY = {
-  currentRate: 159.316,
+  currentRate: 159.34,
   scenarios: {
     optimistic: { label: '円高シナリオ (¥140〜148)', rate: 144, probability: '20〜25%' },
     baseline: { label: 'ベースライン (¥150〜158)', rate: 154, probability: '55〜60%' },
@@ -189,7 +189,7 @@ const INITIAL_STOCKS = [
   // --- 日本株 ---
   {
     symbol: '285A.T', name: 'キオクシアホールディングス', region: 'JP', currency: 'JPY',
-    basePrice: 49870,
+    basePrice: 48010,
     per: 47.0, pbr: 10.9, epsGrowth: 929.4, dividendYield: 0.00, marginRatio: 22.63,
     analystTarget: 118500, analystRating: '強気 Buy',
     note: 'NAND型フラッシュメモリ世界大手。AI・データセンター向け需要が急伸。10月に1:3株式分割予定。',
@@ -217,7 +217,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '6532.T', name: 'ベイカレント・コンサルティング', region: 'JP', currency: 'JPY',
-    basePrice: 7379,
+    basePrice: 7393,
     per: 22.8, pbr: 9.95, epsGrowth: 27.1, dividendYield: 1.76, marginRatio: 1.73,
     analystTarget: 8140, analystRating: '強気 Buy',
     note: 'DX・生成AI導入コンサルに強みを持つ国内トップクラスの総合コンサルファーム。',
@@ -231,7 +231,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '7203.T', name: 'トヨタ自動車', region: 'JP', currency: 'JPY',
-    basePrice: 2999.5,
+    basePrice: 2981,
     per: 11.2, pbr: 0.95, epsGrowth: -27.5, dividendYield: 3.35, marginRatio: 14.30,
     analystTarget: 3543, analystRating: '中立〜やや強気 Neutral',
     note: '自動車世界販売台数首位。HEV販売絶好調。通期利益予想を上方修正。',
@@ -245,7 +245,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '8001.T', name: '伊藤忠商事', region: 'JP', currency: 'JPY',
-    basePrice: 2096,
+    basePrice: 2090.5,
     per: 15.38, pbr: 2.16, epsGrowth: 6.1, dividendYield: 2.10, marginRatio: 8.06,
     analystTarget: 2386, analystRating: 'やや強気 Moderate Buy (4.40)',
     note: '非資源分野に強みを持つ大手総合商社。1Q過去最高益を更新。自社株買い3,000億円を発表。',
@@ -261,7 +261,7 @@ const INITIAL_STOCKS = [
   // --- 米国株 ---
   {
     symbol: 'ACN', name: 'アクセンチュア', region: 'US', currency: 'USD',
-    basePrice: 180.14,
+    basePrice: 178.25,
     per: 12.2, pbr: 3.37, epsGrowth: 7.1, dividendYield: 3.75, marginRatio: 1.10,
     analystTarget: 179.92, analystRating: 'Hold / Moderate Buy (45%Buy/50%Hold)',
     note: 'ITコンサル・SI世界最大手。GenAI関連受注は拡大するも、FY2026成長率ガイダンスを3〜4%に縮小。',
@@ -275,7 +275,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'SPCX', name: 'スペースX', region: 'US', currency: 'USD',
-    basePrice: 146.15,
+    basePrice: 138.74,
     per: null, pbr: null, epsGrowth: 50.0, dividendYield: 0.00, marginRatio: 1.00,
     analystTarget: 165, analystRating: 'Buy (65%Buy/30%Hold)',
     note: '2026年6月12日にNasdaqへIPO（$135/株）。Starlink契約500万人突破。8月にロックアップ期限到来。',
@@ -289,7 +289,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'ORCL', name: 'オラクル', region: 'US', currency: 'USD',
-    basePrice: 153.28,
+    basePrice: 146.71,
     per: 18.5, pbr: 10.25, epsGrowth: 34.0, dividendYield: 1.38, marginRatio: 1.35,
     analystTarget: 261, analystRating: 'Moderate Buy (60%Buy/35%Hold)',
     note: 'OCI（Oracle Cloud Infrastructure）のAIコンピュート需要が急伸。RPO（受注残）$638B（+363%）。',
@@ -303,7 +303,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'WDC', name: 'ウエスタンデジタル (旧サンディスク)', region: 'US', currency: 'USD',
-    basePrice: 454.1,
+    basePrice: 434.50,
     per: 22.5, pbr: 16.8, epsGrowth: 250.0, dividendYield: 0.14, marginRatio: 1.75,
     analystTarget: 534.56, analystRating: 'Buy (65%Buy/30%Hold)',
     note: 'HDD＋NANDフラッシュ（旧SanDisk）大手。AI向けエンタープライズSSD/HDD需要が爆発。配当を再開。',
@@ -317,7 +317,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'NVDA', name: 'エヌビディア', region: 'US', currency: 'USD',
-    basePrice: 224.09,
+    basePrice: 223.96,
     per: 32.5, pbr: 27.73, epsGrowth: 80.0, dividendYield: 0.02, marginRatio: 1.25,
     analystTarget: 302.83, analystRating: '最強気 Strong Buy (98%Buy)',
     note: 'AIアクセラレータ・GPU世界首位。時価総額$5.42T。$500BのAIインフラ資金調達イニシアチブを発表。',
@@ -331,7 +331,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'V', name: 'Visa', region: 'US', currency: 'USD',
-    basePrice: 359.42,
+    basePrice: 361.32,
     per: 24.5, pbr: 19.15, epsGrowth: 14.4, dividendYield: 0.74, marginRatio: 1.05,
     analystTarget: 413.58, analystRating: 'Strong Buy (80%Buy/18%Hold)',
     note: 'デジタル決済ネットワーク世界最大手。$200億の新自社株買いプログラムを承認。',
@@ -345,7 +345,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'MSFT', name: 'マイクロソフト', region: 'US', currency: 'USD',
-    basePrice: 492.43,
+    basePrice: 506.06,
     per: 22.5, pbr: 8.55, epsGrowth: 18.0, dividendYield: 0.73, marginRatio: 1.12,
     analystTarget: 564, analystRating: '最強気 Strong Buy (85%Buy/13%Hold)',
     note: 'Azure AIの急成長とMicrosoft 365 Copilotが3,000万有料企業シートを突破。直近1ヶ月で+31.4%。',
@@ -363,7 +363,7 @@ const INITIAL_STOCKS = [
 function analyzeStock(meta) {
   const days = 250;
   const data = [];
-  const now = new Date('2026-08-11');
+  const now = new Date();
   let price = meta.basePrice * 0.82;
   const vol = Math.min(0.035, (meta.per || 20) * 0.0007 + 0.008);
 
@@ -701,7 +701,7 @@ function App() {
       </main>
 
       <footer className="border-t border-gray-800 py-4 text-center text-xs text-gray-500 mt-8">
-        株価推移 ＆ 1年多因子マルチシナリオ予測ダッシュボード — データ基準日: 2026年8月11日<br/>
+        株価推移予測ダッシュボード — データ基準日: {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}<br/>
         <span className="text-[10px] text-gray-600">※投資勧誘目的ではありません。ファンダメンタルズ指標は各社IR・市場データに基づいています。</span>
       </footer>
 
@@ -850,7 +850,7 @@ function App() {
                 <h3 className="text-sm font-bold text-rose-400 mb-2">⚠️ 免責事項</h3>
                 <p>本予測は統計的モデルに基づく参考情報であり、投資勧誘を目的としたものではありません。実際の投資判断はご自身の責任において行ってください。予測精度を保証するものではなく、市場環境の急変により大幅に乖離する可能性があります。</p>
               </div>
-              <p className="text-[10px] text-gray-500">データ基準日: 2026年8月11日 | 出典: 各社IR適時開示、Bloomberg、Yahoo Finance、Investing.com</p>
+              <p className="text-[10px] text-gray-500">データ基準日: {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })} | 出典: 各社IR適時開示、Bloomberg、Yahoo Finance、Investing.com</p>
             </div>
             <div className="flex justify-end pt-3 border-t border-gray-800 mt-3">
               <button onClick={() => setShowSpec(false)} className="px-5 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 font-semibold rounded-xl">閉じる</button>
