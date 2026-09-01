@@ -168,7 +168,7 @@ const { useState, useEffect, useMemo, useRef } = React;
 
 // ========== USD/JPY 為替予想データ (2026年8月時点) ==========
 const USDJPY = {
-  currentRate: 159.731,
+  currentRate: 160.143,
   scenarios: {
     optimistic: { label: '円高シナリオ (¥140〜148)', rate: 144, probability: '20〜25%' },
     baseline: { label: 'ベースライン (¥150〜158)', rate: 154, probability: '55〜60%' },
@@ -189,7 +189,7 @@ const INITIAL_STOCKS = [
   // --- 日本株 ---
   {
     symbol: '285A.T', name: 'キオクシアホールディングス', region: 'JP', currency: 'JPY',
-    basePrice: 49990,
+    basePrice: 51000,
     per: 47.0, pbr: 10.9, epsGrowth: 929.4, dividendYield: 0.00, marginRatio: 22.63,
     analystTarget: 118500, analystRating: '強気 Buy',
     note: 'NAND型フラッシュメモリ世界大手。AI・データセンター向け需要が急伸。10月に1:3株式分割予定。',
@@ -203,7 +203,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '4568.T', name: '第一三共', region: 'JP', currency: 'JPY',
-    basePrice: 2848,
+    basePrice: 2850.5,
     per: 20.34, pbr: 3.00, epsGrowth: -4.5, dividendYield: 3.57, marginRatio: 42.29,
     analystTarget: 3967, analystRating: '強気 Moderate Buy (4.5/5.0)',
     note: '抗がん剤ADC「エンハーツ」等のグローバル展開で高成長。年間配当100円。',
@@ -217,7 +217,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '6532.T', name: 'ベイカレント・コンサルティング', region: 'JP', currency: 'JPY',
-    basePrice: 8192,
+    basePrice: 8143,
     per: 22.8, pbr: 9.95, epsGrowth: 27.1, dividendYield: 1.76, marginRatio: 1.73,
     analystTarget: 8140, analystRating: '強気 Buy',
     note: 'DX・生成AI導入コンサルに強みを持つ国内トップクラスの総合コンサルファーム。',
@@ -261,7 +261,7 @@ const INITIAL_STOCKS = [
   // --- 米国株 ---
   {
     symbol: 'ACN', name: 'アクセンチュア', region: 'US', currency: 'USD',
-    basePrice: 189.76,
+    basePrice: 188.09,
     per: 12.2, pbr: 3.37, epsGrowth: 7.1, dividendYield: 3.75, marginRatio: 1.10,
     analystTarget: 179.92, analystRating: 'Hold / Moderate Buy (45%Buy/50%Hold)',
     note: 'ITコンサル・SI世界最大手。GenAI関連受注は拡大するも、FY2026成長率ガイダンスを3〜4%に縮小。',
@@ -275,7 +275,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'SPCX', name: 'スペースX', region: 'US', currency: 'USD',
-    basePrice: 143.69,
+    basePrice: 142.23,
     per: null, pbr: null, epsGrowth: 50.0, dividendYield: 0.00, marginRatio: 1.00,
     analystTarget: 165, analystRating: 'Buy (65%Buy/30%Hold)',
     note: '2026年6月12日にNasdaqへIPO（$135/株）。Starlink契約500万人突破。8月にロックアップ期限到来。',
@@ -289,7 +289,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'ORCL', name: 'オラクル', region: 'US', currency: 'USD',
-    basePrice: 149.12,
+    basePrice: 141.32,
     per: 18.5, pbr: 10.25, epsGrowth: 34.0, dividendYield: 1.38, marginRatio: 1.35,
     analystTarget: 261, analystRating: 'Moderate Buy (60%Buy/35%Hold)',
     note: 'OCI（Oracle Cloud Infrastructure）のAIコンピュート需要が急伸。RPO（受注残）$638B（+363%）。',
@@ -303,7 +303,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'WDC', name: 'ウエスタンデジタル (旧サンディスク)', region: 'US', currency: 'USD',
-    basePrice: 450.55,
+    basePrice: 450.44,
     per: 22.5, pbr: 16.8, epsGrowth: 250.0, dividendYield: 0.14, marginRatio: 1.75,
     analystTarget: 534.56, analystRating: 'Buy (65%Buy/30%Hold)',
     note: 'HDD＋NANDフラッシュ（旧SanDisk）大手。AI向けエンタープライズSSD/HDD需要が爆発。配当を再開。',
@@ -317,7 +317,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'NVDA', name: 'エヌビディア', region: 'US', currency: 'USD',
-    basePrice: 220.78,
+    basePrice: 217.44,
     per: 32.5, pbr: 27.73, epsGrowth: 80.0, dividendYield: 0.02, marginRatio: 1.25,
     analystTarget: 302.83, analystRating: '最強気 Strong Buy (98%Buy)',
     note: 'AIアクセラレータ・GPU世界首位。時価総額$5.42T。$500BのAIインフラ資金調達イニシアチブを発表。',
@@ -331,7 +331,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'V', name: 'Visa', region: 'US', currency: 'USD',
-    basePrice: 379.37,
+    basePrice: 372.67,
     per: 24.5, pbr: 19.15, epsGrowth: 14.4, dividendYield: 0.74, marginRatio: 1.05,
     analystTarget: 413.58, analystRating: 'Strong Buy (80%Buy/18%Hold)',
     note: 'デジタル決済ネットワーク世界最大手。$200億の新自社株買いプログラムを承認。',
@@ -345,7 +345,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: 'MSFT', name: 'マイクロソフト', region: 'US', currency: 'USD',
-    basePrice: 507.29,
+    basePrice: 501.02,
     per: 22.5, pbr: 8.55, epsGrowth: 18.0, dividendYield: 0.73, marginRatio: 1.12,
     analystTarget: 564, analystRating: '最強気 Strong Buy (85%Buy/13%Hold)',
     note: 'Azure AIの急成長とMicrosoft 365 Copilotが3,000万有料企業シートを突破。直近1ヶ月で+31.4%。',
