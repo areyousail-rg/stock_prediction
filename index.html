@@ -168,7 +168,7 @@ const { useState, useEffect, useMemo, useRef } = React;
 
 // ========== USD/JPY 為替予想データ (2026年8月時点) ==========
 const USDJPY = {
-  currentRate: 156.004,
+  currentRate: 154.33,
   scenarios: {
     optimistic: { label: '円高シナリオ (¥140〜148)', rate: 144, probability: '20〜25%' },
     baseline: { label: 'ベースライン (¥150〜158)', rate: 154, probability: '55〜60%' },
@@ -189,7 +189,7 @@ const INITIAL_STOCKS = [
   // --- 日本株 ---
   {
     symbol: '285A.T', name: 'キオクシアホールディングス', region: 'JP', currency: 'JPY',
-    basePrice: 54460,
+    basePrice: 59530,
     per: 47.0, pbr: 10.9, epsGrowth: 929.4, dividendYield: 0.00, marginRatio: 22.63,
     analystTarget: 118500, analystRating: '強気 Buy',
     note: 'NAND型フラッシュメモリ世界大手。AI・データセンター向け需要が急伸。10月に1:3株式分割予定。',
@@ -203,7 +203,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '4568.T', name: '第一三共', region: 'JP', currency: 'JPY',
-    basePrice: 2794,
+    basePrice: 2735.5,
     per: 20.34, pbr: 3.00, epsGrowth: -4.5, dividendYield: 3.57, marginRatio: 42.29,
     analystTarget: 3967, analystRating: '強気 Moderate Buy (4.5/5.0)',
     note: '抗がん剤ADC「エンハーツ」等のグローバル展開で高成長。年間配当100円。',
@@ -217,7 +217,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '6532.T', name: 'ベイカレント・コンサルティング', region: 'JP', currency: 'JPY',
-    basePrice: 7824,
+    basePrice: 7403,
     per: 22.8, pbr: 9.95, epsGrowth: 27.1, dividendYield: 1.76, marginRatio: 1.73,
     analystTarget: 8140, analystRating: '強気 Buy',
     note: 'DX・生成AI導入コンサルに強みを持つ国内トップクラスの総合コンサルファーム。',
@@ -231,7 +231,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '7203.T', name: 'トヨタ自動車', region: 'JP', currency: 'JPY',
-    basePrice: 3081,
+    basePrice: 3096,
     per: 11.2, pbr: 0.95, epsGrowth: -27.5, dividendYield: 3.35, marginRatio: 14.30,
     analystTarget: 3543, analystRating: '中立〜やや強気 Neutral',
     note: '自動車世界販売台数首位。HEV販売絶好調。通期利益予想を上方修正。',
@@ -245,7 +245,7 @@ const INITIAL_STOCKS = [
   },
   {
     symbol: '8001.T', name: '伊藤忠商事', region: 'JP', currency: 'JPY',
-    basePrice: 2204,
+    basePrice: 2264.5,
     per: 15.38, pbr: 2.16, epsGrowth: 6.1, dividendYield: 2.10, marginRatio: 8.06,
     analystTarget: 2386, analystRating: 'やや強気 Moderate Buy (4.40)',
     note: '非資源分野に強みを持つ大手総合商社。1Q過去最高益を更新。自社株買い3,000億円を発表。',
